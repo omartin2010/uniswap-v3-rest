@@ -290,13 +290,20 @@ class univ3_position():
         self.get_liquidity()
         output = {}
         # output['liquidity'] = self._liquidity
-        output['upper_tick'] = self._upper_tick
-        output['lower_tick'] = self._lower_tick
-        output['pool_id'] = self.pool._pool_id
-        output['uncollected_token0'] = self._last_feetoken0
-        output['uncollected_token1'] = self._last_feetoken1
-        output['liquidity_amounts'] = [self._last_liquidity_token0, self._last_liquidity_token1]
-        output['price'] = [self.pool.token0Price, self.pool.token1Price]
+        output['position_configuration']={}
+        output['uncollected_tokens']={}
+        output['liquidity_amounts']={}
+        output['price']={}
+        
+        output['position_configuration']['upper_tick'] = self._upper_tick
+        output['position_configuration']['lower_tick'] = self._lower_tick
+        output['position_configuration']['pool_id'] = self.pool._pool_id
+        output['uncollected_tokens']['token0'] = self._last_feetoken0
+        output['uncollected_tokens']['token1'] = self._last_feetoken1
+        output['liquidity_amounts']['token0'] = self._last_liquidity_token0
+        output['liquidity_amounts']['token1'] = self._last_liquidity_token1
+        output['price']['token0'] = self.pool.token0Price
+        output['price']['token1'] = self.pool.token1Price
         return output
     
     def add_to_position_split(self, token0_amount: float, token1_amount: float):
