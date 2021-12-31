@@ -9,3 +9,6 @@ print(f'unclaimed = {pos.get_uncollected_fees()}')
 
 output = json.dumps(pos.describe_position())
 print(output)
+
+toks = pos.add_to_position_split(2100, 0.54)
+print(toks)

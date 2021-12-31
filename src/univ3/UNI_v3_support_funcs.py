@@ -8,7 +8,7 @@ Created on Fri Dec 24 2021 21:41 EST
 
 import numpy as np
 import requests
-from .UNI_v3_funcs import get_amounts
+from .UNI_v3_funcs import amounts_relation, get_amounts
 
 uniswap_headers = {}
 uniswap_graphql_url = 'https://api.thegraph.com/subgraphs/name/uniswap/uniswap-v3'
@@ -41,8 +41,54 @@ class univ3_pool():
     ''' object representing a pool in univ3 '''
     
     def __init__(self, pool_id:str) -> None:
+        global uniswap_graphql_url
+        global uniswap_headers
         self._pool_id = pool_id
+
+        pool_query = '''
+        {
+            pool(id: "''' + str(self._pool_id) + '''") {
+                token0 {
+                    symbol
+                    decimals
+                }
+                token1 {
+                    symbol
+                    decimals
+                }
+            }
+        }
+        '''
+        get = requests.post(
+            url=uniswap_graphql_url,
+            json={'query': pool_query},
+            headers=uniswap_headers)
+
+        if (get.status_code == 200):
+            pool_data = get.json()
+            self._token0_symbol = str(pool_data['data']['pool']['token0']['symbol'])
+            self._token1_symbol = str(pool_data['data']['pool']['token1']['symbol'])
+            self._token0_decimals = int(pool_data['data']['pool']['token0']['decimals'])
+            self._token1_decimals = int(pool_data['data']['pool']['token1']['decimals'])
+        else:
+            print("req failed.")
     
+    @property
+    def token0_symbol(self):
+        return self._token0_symbol
+    
+    @property
+    def token1_symbol(self):
+        return self._token1_symbol
+    
+    @property
+    def token0_decimals(self):
+        return self._token0_decimals
+    
+    @property
+    def token1_decimals(self):
+        return self._token1_decimals
+
     @property
     def pool_id(self):
         return self._pool_id
@@ -156,6 +202,11 @@ class univ3_position():
         return self._position_id
 
     @property
+    def current_tick(self):
+        current_tick = self.get_tick_at_price(self.pool.token0Price)
+        return current_tick
+
+    @property
     def liquidity(self):
         return self._liquidity
 
@@ -247,3 +298,39 @@ class univ3_position():
         output['liquidity_amounts'] = [self._last_liquidity_token0, self._last_liquidity_token1]
         output['price'] = [self.pool.token0Price, self.pool.token1Price]
         return output
+    
+    def add_to_position_split(self, token0_amount: float, token1_amount: float):
+        """ used to determine the amount of token0, token1 that needs to be added
+        should you decide to increase your position (compounding returns when collecting fees
+        to reinject in the position for example. For example, if you have 1000USD worth
+        of tokens (500USDC + 0.125ETH @ 4000USD/ETH), what is the mix of tokens, at
+        current price, in this position, do we need to add? - then a swap will likely 
+        be necessary to get to that mix """
+
+        ar = amounts_relation(self.current_tick, 
+                              self.lower_tick,
+                              self.upper_tick,
+                              self.pool.token0_decimals,
+                              self.pool.token1_decimals)
+        
+        # Get the total value of tokens proposed (USDC + ETH for example)
+        usd_proposed_tokens_value = token0_amount + self.pool.token0Price * token1_amount
+        required_tok0 = usd_proposed_tokens_value/(1+ar*self.pool.token0Price)
+        required_tok1 = required_tok0 * ar
+
+        if required_tok0 >= token0_amount:
+            """ need to sell token1 to buy more token 0
+            for example sell 0.1E to buy USDC
+            """
+            sell_token1 = True
+            sell_amount = token1_amount - required_tok1
+        else:
+            """ need to sell token0 or buy token 1
+            for example buy 0.1E with USDC
+            """
+            sell_token1 = False
+            sell_amount = token0_amount - required_tok0
+
+        return (required_tok0, required_tok1, sell_token1, sell_amount)
+
+
