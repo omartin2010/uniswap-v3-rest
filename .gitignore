@@ -4,3 +4,4 @@ src/test/*
 .ipynb_checkpoints/*
 notebooks/*
 *.pyc
+.env
