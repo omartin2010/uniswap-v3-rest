@@ -1,8 +1,6 @@
 from flask import Flask, jsonify, request
 from univ3.UNI_v3_support_funcs import univ3_position
-import dotenv
 
-dotenv.load()
 app = Flask(__name__)
 
 @app.errorhandler(404)
