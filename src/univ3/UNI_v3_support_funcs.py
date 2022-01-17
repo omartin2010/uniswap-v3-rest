@@ -252,14 +252,34 @@ class univ3_position():
     def pool(self):
         return self._pool
 
-    def _calculate_uncollected_fees(self):
+    def _get_uncollected_fees(self):
 
         feetoken0, feetoken1 = self._collect_uniswap_fees.call()
         self._last_feetoken0 = feetoken0/10**self.token0_decimals
         self._last_feetoken1 = feetoken1/10**self.token1_decimals
 
+    def _get_collected_fees(self):
+        """ figures what has been collected from ethereum events for collect """
+        ef = self._uniswap_contract.events.Collect.createFilter(
+            fromBlock=1, 
+            argument_filters = {'tokenId':self._position_id})
+        collect_events = ef.get_all_entries()
+        amount0 = 0
+        amount1 = 0
+        for collect_event in collect_events:
+            amount0 += collect_event['args']['amount0']
+            amount1 += collect_event['args']['amount1']
+        self._collected_feetoken0 = amount0/10**self.token0_decimals
+        self._collected_feetoken1 = amount1/10**self.token1_decimals
+
+    def get_collected_fees(self):
+        """ used for testing """
+        self._get_collected_fees()
+        return [self._collected_feetoken0, self._collected_feetoken1]
+
     def get_uncollected_fees(self):
-        self._calculate_uncollected_fees()
+        """ used for testing """
+        self._get_uncollected_fees()
         return [self._last_feetoken0, self._last_feetoken1]
 
     def get_liquidity(self):
@@ -270,11 +290,14 @@ class univ3_position():
 
     def describe_position(self):
         '''describes the important features of the position'''
-        self._calculate_uncollected_fees()
+        
+        self._get_uncollected_fees()
+        self._get_collected_fees()
         self.get_liquidity()
         output = {}
         # output['liquidity'] = self._liquidity
         output['position_configuration']={}
+        output['collected_tokens']={}
         output['uncollected_tokens']={}
         output['liquidity_amounts']={}
         output['price']={}
@@ -282,6 +305,8 @@ class univ3_position():
         output['position_configuration']['upper_tick'] = self._upper_tick
         output['position_configuration']['lower_tick'] = self._lower_tick
         output['position_configuration']['pool_id'] = self.pool._pool_id
+        output['collected_tokens']['collected_tokens_token0'] = self._collected_feetoken0
+        output['collected_tokens']['collected_tokens_token1'] = self._collected_feetoken1
         output['uncollected_tokens']['uncollected_tokens_token0'] = self._last_feetoken0
         output['uncollected_tokens']['uncollected_tokens_token1'] = self._last_feetoken1
         output['liquidity_amounts']['liquidity_token0'] = self._last_liquidity_token0
