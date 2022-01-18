@@ -13,6 +13,7 @@ import numpy as np
 from web3.auto.infura import w3
 from pathlib import Path
 import requests
+import datetime
 from .UNI_v3_funcs import amounts_relation, get_amounts
 
 uniswap_headers = {}
@@ -166,6 +167,23 @@ class univ3_position():
         """
         return  1/(1.0001**tick/10**(tok_dec_s0 - tok_dec_s1))
 
+    @classmethod
+    def get_eth_value_at_date(cls, current_block_date):
+        """returns eth value at this date based on coingecko API"""
+        
+        datestr = current_block_date.strftime('%d-%m-%Y')
+        req_url = f'https://api.coingecko.com/api/v3/coins/ethereum/history?date={datestr}'
+        headers = {'accept': 'application/json'}
+        get = requests.get(
+            url=req_url,
+            headers=headers)
+
+        if (get.status_code == 200):
+            output = get.json()
+        else:
+            print("req failed.")
+        return output['market_data']['current_price']['usd']
+
     def __init__(self, __position_id:int) -> None:
         global uniswap_graphql_url
         global uniswap_headers
@@ -282,6 +300,37 @@ class univ3_position():
         self._get_uncollected_fees()
         return [self._last_feetoken0, self._last_feetoken1]
 
+    def _get_consumed_gas(self):
+        
+        # Retrieve transactions for this position
+        txs=[]
+        ef = self._uniswap_contract.events.Collect.createFilter(fromBlock=1, argument_filters=
+                                                        {'tokenId':self.position_id})
+        txs.extend(ef.get_all_entries())
+        ef = self._uniswap_contract.events.DecreaseLiquidity.createFilter(fromBlock=1, argument_filters=
+                                                    {'tokenId':self.position_id})
+        txs.extend(ef.get_all_entries())
+        ef = self._uniswap_contract.events.IncreaseLiquidity.createFilter(fromBlock=1, argument_filters=
+                                                        {'tokenId':self.position_id})
+        txs.extend(ef.get_all_entries())
+        
+        total_gasconsumed_eth = 0
+        total_gasconsumed_usd = 0
+        # loop for each tx
+        for tx in txs:
+            hash=tx['transactionHash'].hex()
+            tx_details = w3.eth.get_transaction_receipt(hash)
+            tx_eth_gas = tx_details['effectiveGasPrice']*tx_details['gasUsed']/10**18
+            current_block_number = tx['blockNumber']
+            current_block_timetamp = w3.eth.get_block(current_block_number)['timestamp']
+            current_block_date = datetime.datetime.fromtimestamp(current_block_timetamp)
+            total_gasconsumed_eth += tx_eth_gas
+            total_gasconsumed_usd += tx_eth_gas * self.get_eth_value_at_date(current_block_date)
+            
+        self.total_gasconsumed_eth = total_gasconsumed_eth
+        self.total_gasconsumed_usd = total_gasconsumed_usd
+
+
     def get_liquidity(self):
         current_tick = self.get_tick_at_price(self.pool.token0Price)
         toks = get_amounts(current_tick, self._lower_tick, self._upper_tick, self._liquidity, 6, 18)
@@ -294,6 +343,7 @@ class univ3_position():
         self._get_uncollected_fees()
         self._get_collected_fees()
         self.get_liquidity()
+        self._get_consumed_gas()
         output = {}
         # output['liquidity'] = self._liquidity
         output['position_configuration']={}
@@ -301,6 +351,7 @@ class univ3_position():
         output['uncollected_tokens']={}
         output['liquidity_amounts']={}
         output['price']={}
+        output['gas_price']={}
         
         output['position_configuration']['upper_tick'] = self._upper_tick
         output['position_configuration']['lower_tick'] = self._lower_tick
@@ -313,6 +364,9 @@ class univ3_position():
         output['liquidity_amounts']['liquidity_token1'] = self._last_liquidity_token1
         output['price']['price_token0'] = self.pool.token0Price
         output['price']['price_token1'] = self.pool.token1Price
+        output['gas_price']['eth'] = self.total_gasconsumed_eth
+        output['gas_price']['usd'] = self.total_gasconsumed_usd
+
         return output
     
     def add_to_position_split(self, token0_amount: float, token1_amount: float):
