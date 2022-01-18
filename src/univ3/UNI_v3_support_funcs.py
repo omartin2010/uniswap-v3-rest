@@ -364,8 +364,8 @@ class univ3_position():
         output['liquidity_amounts']['liquidity_token1'] = self._last_liquidity_token1
         output['price']['price_token0'] = self.pool.token0Price
         output['price']['price_token1'] = self.pool.token1Price
-        output['gas_price']['eth'] = self.total_gasconsumed_eth
-        output['gas_price']['usd'] = self.total_gasconsumed_usd
+        output['gas_price']['gas_price_eth'] = self.total_gasconsumed_eth
+        output['gas_price']['gas_price_usd'] = self.total_gasconsumed_usd
 
         return output
     
