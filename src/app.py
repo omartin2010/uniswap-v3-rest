@@ -3,6 +3,11 @@ from univ3.UNI_v3_support_funcs import univ3_position
 
 app = Flask(__name__)
 
+@app.route('/')
+def hello():
+    return 'Hello!'
+
+
 @app.errorhandler(404)
 def page_not_found(error):
     output={}
@@ -23,7 +28,12 @@ def position_describe(position_id: str):
 
 @app.route('/position/add_to_position_split/<position_id>', methods=['GET'])
 def position_add_to_position_split(position_id: str):
-
+    """
+    here token0 is the amount of token0 we want to add (maybe reinvest
+    redistributions)
+    token1 is the same. So in USDC/ETH pair, token0 is USDC and token1
+    is ETH.
+    """
     output = {}
     try:
         pos = univ3_position(int(position_id))
